@@ -268,6 +268,24 @@ TEST(many_orders_stay_consistent) {
     return ok;
 }
 
+// ---------------------------------------------------------------- buffer API
+
+TEST(reusable_trade_buffer_is_cleared_each_call) {
+    bool ok = true;
+    OrderBook book;
+    std::vector<Trade> trades;
+    book.add_limit(1, Side::Sell, 100, 5, trades);
+    CHECK(trades.empty());
+    book.add_limit(2, Side::Buy, 100, 3, trades);
+    CHECK(trades.size() == 1 && trades[0].sell_id == 1 && trades[0].quantity == 3);
+    book.add_market(3, Side::Buy, 10, trades);  // previous trade must not linger
+    CHECK(trades.size() == 1 && trades[0].buy_id == 3 && trades[0].quantity == 2);
+    book.add_limit(4, Side::Buy, 99, 1, trades);
+    CHECK(trades.empty());
+    CHECK(book.order_count() == 1);
+    return ok;
+}
+
 int main() {
     for (auto& t : registry()) {
         bool passed = t.fn();

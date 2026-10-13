@@ -38,6 +38,11 @@ public:
     // side is empty. A market order never rests in the book.
     std::vector<Trade> add_market(OrderId id, Side side, Quantity qty);
 
+    // Allocation-free variants for the hot path: `trades` is cleared and then
+    // filled, so one buffer can be reused for every call and keeps its capacity.
+    void add_limit(OrderId id, Side side, Price price, Quantity qty, std::vector<Trade>& trades);
+    void add_market(OrderId id, Side side, Quantity qty, std::vector<Trade>& trades);
+
     // Removes a resting order. Returns false if the id is unknown
     // (never added, already filled, or already cancelled).
     bool cancel(OrderId id);

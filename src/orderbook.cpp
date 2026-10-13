@@ -72,7 +72,19 @@ void OrderBook::erase_resting(Levels& levels, const Locator& loc) {
 
 std::vector<Trade> OrderBook::add_limit(OrderId id, Side side, Price price, Quantity qty) {
     std::vector<Trade> trades;
-    if (qty == 0) return trades;
+    add_limit(id, side, price, qty, trades);
+    return trades;
+}
+
+std::vector<Trade> OrderBook::add_market(OrderId id, Side side, Quantity qty) {
+    std::vector<Trade> trades;
+    add_market(id, side, qty, trades);
+    return trades;
+}
+
+void OrderBook::add_limit(OrderId id, Side side, Price price, Quantity qty, std::vector<Trade>& trades) {
+    trades.clear();
+    if (qty == 0) return;
     if (side == Side::Buy) {
         qty = match(asks_, id, side, price, qty, trades);
         if (qty > 0) rest(bids_, id, side, price, qty);
@@ -80,18 +92,16 @@ std::vector<Trade> OrderBook::add_limit(OrderId id, Side side, Price price, Quan
         qty = match(bids_, id, side, price, qty, trades);
         if (qty > 0) rest(asks_, id, side, price, qty);
     }
-    return trades;
 }
 
-std::vector<Trade> OrderBook::add_market(OrderId id, Side side, Quantity qty) {
-    std::vector<Trade> trades;
+void OrderBook::add_market(OrderId id, Side side, Quantity qty, std::vector<Trade>& trades) {
+    trades.clear();
     // Any unfilled remainder is simply dropped: a market order never rests.
     if (side == Side::Buy) {
         match(asks_, id, side, std::nullopt, qty, trades);
     } else {
         match(bids_, id, side, std::nullopt, qty, trades);
     }
-    return trades;
 }
 
 bool OrderBook::cancel(OrderId id) {

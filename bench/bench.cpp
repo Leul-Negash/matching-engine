@@ -76,14 +76,19 @@ std::vector<Op> generate() {
     return ops;
 }
 
+// One trade buffer reused for every call, so the hot loop never allocates it.
+std::vector<Trade> trades;
+
 inline std::uint64_t apply(OrderBook& book, const Op& op) {
     std::uint64_t traded = 0;
     switch (op.kind) {
         case Kind::Limit:
-            for (const Trade& t : book.add_limit(op.id, op.side, op.price, op.qty)) traded += t.quantity;
+            book.add_limit(op.id, op.side, op.price, op.qty, trades);
+            for (const Trade& t : trades) traded += t.quantity;
             break;
         case Kind::Market:
-            for (const Trade& t : book.add_market(op.id, op.side, op.qty)) traded += t.quantity;
+            book.add_market(op.id, op.side, op.qty, trades);
+            for (const Trade& t : trades) traded += t.quantity;
             break;
         case Kind::Cancel:
             traded += book.cancel(op.id);
@@ -102,6 +107,7 @@ double percentile_ns(const std::vector<std::int64_t>& sorted, double p) {
 
 int main() {
     const std::vector<Op> ops = generate();
+    trades.reserve(1024);
     std::size_t counts[3] = {};
     for (const Op& op : ops) ++counts[static_cast<int>(op.kind)];
     std::printf("ops: %zu  (limit %zu, cancel %zu, market %zu), seed %llu\n\n", ops.size(),
