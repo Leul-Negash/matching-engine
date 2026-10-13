@@ -128,6 +128,8 @@ TEST(engine_routes_by_instrument_and_sequences_outputs) {
     for (const Output& o : out) CHECK(o.seq == expect++);  // gap-free
     CHECK(e.last_seq() == out.size());
     CHECK(e.max_order_id() == 3);
+    e.process(new_order(0, 4, Side::Buy, 90, 1, /*acct=*/42), out);
+    CHECK(e.max_account() == 42);  // the gateway starts session ids above this after recovery
     return ok;
 }
 

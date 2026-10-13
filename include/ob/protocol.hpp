@@ -12,7 +12,7 @@
 //   PING
 //
 // Server -> client: ACK, REJECT, FILL, CANCELED, MODIFIED, TRADE, BBO, LEVEL,
-// BOOKEND, PONG, ERROR (formatted by the functions below).
+// BOOKEND, SUBSCRIBED, UNSUBSCRIBED, PONG, ERROR (formatted below).
 
 #include "ob/order_book.hpp"
 #include "ob/types.hpp"
@@ -57,6 +57,7 @@ void trade(std::string& out, std::string_view symbol, Price price, Quantity qty,
 void bbo(std::string& out, std::string_view symbol, const TopOfBook& top);
 void level(std::string& out, std::string_view symbol, Side side, const DepthLevel& l);
 void book_end(std::string& out, std::string_view symbol);
+void subscribed(std::string& out, std::string_view symbol, bool on);
 void pong(std::string& out);
 void error(std::string& out, std::string_view message);
 

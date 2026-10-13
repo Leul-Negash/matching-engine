@@ -96,6 +96,7 @@ public:
 
     std::uint64_t last_seq() const { return seq_; }
     OrderId max_order_id() const { return max_order_id_; }
+    AccountId max_account() const { return max_account_; }
     std::uint64_t commands_processed() const { return commands_; }
 
 private:
@@ -118,6 +119,7 @@ private:
     std::uint64_t seq_ = 0;
     std::uint64_t commands_ = 0;
     OrderId max_order_id_ = 0;
+    AccountId max_account_ = 0;
 };
 
 }  // namespace ob

@@ -263,6 +263,10 @@ void book_end(std::string& out, std::string_view symbol) {
     Line(out, "BOOKEND").s(symbol);
 }
 
+void subscribed(std::string& out, std::string_view symbol, bool on) {
+    Line(out, on ? "SUBSCRIBED" : "UNSUBSCRIBED").s(symbol);
+}
+
 void pong(std::string& out) {
     Line(out, "PONG");
 }

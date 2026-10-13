@@ -75,7 +75,7 @@ bench:
 # End-to-end: start the server, drive it over TCP, check replies and recovery.
 smoke:
 	$(MAKE) BUILD=release all
-	./scripts/smoke_test.sh build/release
+	python3 scripts/smoke_test.py build/release
 
 # Everything CI runs.
 check: test test-asan test-tsan smoke

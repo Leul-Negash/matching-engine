@@ -31,7 +31,10 @@ Output Engine::make_output(Output::Kind kind, const Command& cmd) {
 
 void Engine::process(const Command& cmd, std::vector<Output>& out) {
     ++commands_;
-    if (cmd.type == CommandType::New) max_order_id_ = std::max(max_order_id_, cmd.order_id);
+    if (cmd.type == CommandType::New) {
+        max_order_id_ = std::max(max_order_id_, cmd.order_id);
+        max_account_ = std::max(max_account_, cmd.account);
+    }
 
     if (cmd.instrument >= instruments_.size()) {
         Output o = make_output(Output::Kind::Order, cmd);
