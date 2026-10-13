@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-14
+          g++-14 --version
+
+      # Recent runner kernels randomize mmap addresses more aggressively than
+      # the sanitizers' fixed shadow-memory layout allows.
+      - name: Sanitizer-compatible ASLR
+        run: sudo sysctl vm.mmap_rnd_bits=28
+
+      - name: Unit, behaviour and differential tests
+        run: make -j"$(nproc)" test CXX=g++-14
+
+      - name: AddressSanitizer + UndefinedBehaviorSanitizer
+        run: make -j"$(nproc)" test-asan CXX=g++-14
+
+      - name: ThreadSanitizer
+        run: make -j"$(nproc)" test-tsan CXX=g++-14
+
+      - name: End-to-end smoke test (server, crash recovery)
+        run: make -j"$(nproc)" smoke CXX=g++-14
+
+      - name: Benchmarks (informational)
+        run: |
+          make -j"$(nproc)" bench CXX=g++-14
+          make -j"$(nproc)" bench-e2e CXX=g++-14

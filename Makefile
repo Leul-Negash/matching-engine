@@ -82,8 +82,13 @@ smoke:
 	$(MAKE) BUILD=release all
 	python3 scripts/smoke_test.py build/release
 
-# Everything CI runs.
-check: test test-asan test-tsan smoke
+# Everything CI runs. Stages run one after another (each still builds in
+# parallel) so two sub-makes never write the same build directory at once.
+check:
+	$(MAKE) test
+	$(MAKE) test-asan
+	$(MAKE) test-tsan
+	$(MAKE) smoke
 
 clean:
 	rm -rf build
