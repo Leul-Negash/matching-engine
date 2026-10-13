@@ -80,6 +80,18 @@ private:
     // Appends an order to the back of its price level and indexes it.
     template <class Levels>
     void rest(Levels& levels, OrderId id, Side side, Price price, Quantity qty);
+
+    // The one matching loop shared by limit and market orders. Trades the
+    // incoming order against `opposite` (best level first, FIFO within a level)
+    // while its price is acceptable; no limit means a market order.
+    // Returns the quantity left unfilled.
+    template <class Levels>
+    Quantity match(Levels& opposite, OrderId id, Side side, std::optional<Price> limit,
+                   Quantity qty, std::vector<Trade>& trades);
+
+    // Removes one resting order (located via the index) from its level.
+    template <class Levels>
+    void erase_resting(Levels& levels, const Locator& loc);
 };
 
 }  // namespace ob
