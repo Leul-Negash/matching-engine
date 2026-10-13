@@ -4,6 +4,10 @@
 
 namespace ob {
 
+OrderBook::OrderBook(std::size_t expected_orders) {
+    index_.reserve(expected_orders);
+}
+
 template <class Levels>
 void OrderBook::rest(Levels& levels, OrderId id, Side side, Price price, Quantity qty) {
     Level& level = levels[price];  // creates the level if it doesn't exist yet

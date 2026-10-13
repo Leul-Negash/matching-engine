@@ -19,6 +19,7 @@ constexpr std::size_t kOps = 1'000'000;
 constexpr std::uint64_t kSeed = 42;
 constexpr Price kMid = 10'000;  // ticks
 constexpr int kRuns = 5;
+constexpr std::size_t kExpectedOrders = kOps;  // upper bound on resting orders
 
 enum class Kind : std::uint8_t { Limit, Cancel, Market };
 
@@ -111,7 +112,7 @@ int main() {
     std::uint64_t checksum = 0;
     std::vector<double> rates;
     for (int run = 0; run < kRuns; ++run) {
-        OrderBook book;
+        OrderBook book(kExpectedOrders);
         std::uint64_t sink = 0;
         const auto start = Clock::now();
         for (const Op& op : ops) sink += apply(book, op);
@@ -130,7 +131,7 @@ int main() {
     std::vector<std::int64_t> by_kind[3];
     for (int k = 0; k < 3; ++k) by_kind[k].reserve(counts[k]);
     {
-        OrderBook book;
+        OrderBook book(kExpectedOrders);
         std::uint64_t sink = 0;
         for (std::size_t i = 0; i < ops.size(); ++i) {
             const auto start = Clock::now();

@@ -25,6 +25,10 @@ struct Trade {
 
 class OrderBook {
 public:
+    // expected_orders: peak number of resting orders to pre-size the id index
+    // for, so it never rehashes (a multi-millisecond stall) mid-session.
+    explicit OrderBook(std::size_t expected_orders = 0);
+
     // Adds a limit order. Matches it against the opposite side first
     // (price-time priority); any remainder rests in the book.
     // Returns the trades produced, in the order they happened.
