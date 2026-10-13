@@ -1,5 +1,7 @@
 # Limit Order Book and Matching Engine (C++20)
 
+[![ci](https://github.com/Leul-Negash/matching-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Leul-Negash/matching-engine/actions/workflows/ci.yml)
+
 This is a multi-instrument exchange matching engine. It does price-time
 priority matching and serves a TCP order-entry gateway. It keeps a crash-safe
 write-ahead journal and passes the matching thread work through lock-free
