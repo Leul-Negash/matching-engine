@@ -1,8 +1,8 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <functional>
-#include <map>
 #include <optional>
 #include <unordered_map>
 #include <vector>
@@ -82,10 +82,56 @@ private:
         Quantity total = 0;  // cached sum of the queue's qty, so volume_at is O(1)
     };
 
-    // Sorted price levels per side; begin() is always the best price.
-    // Bids sort descending (std::greater), asks ascending (std::less).
-    std::map<Price, Level, std::greater<Price>> bids_;
-    std::map<Price, Level, std::less<Price>> asks_;
+    // Price levels of one side in a contiguous vector sorted worst -> best, so
+    // the best level is back(): reading or removing it is O(1), and a new level
+    // near the top of the book (where most orders land) shifts only a few
+    // elements. Lookup by price is a binary search. `Better` orders prices
+    // best-first: std::greater for bids, std::less for asks.
+    template <class Better>
+    class Levels {
+    public:
+        struct Entry {
+            Price price;
+            Level level;
+        };
+
+        bool empty() const { return v_.empty(); }
+        Entry& best() { return v_.back(); }
+        const Entry& best() const { return v_.back(); }
+        void pop_best() { v_.pop_back(); }
+
+        // Is price a strictly better than price b for this side?
+        static bool better(Price a, Price b) { return Better{}(a, b); }
+
+        Level* find(Price price) {
+            auto it = lower(price);
+            return it != v_.end() && it->price == price ? &it->level : nullptr;
+        }
+        const Level* find(Price price) const {
+            return const_cast<Levels*>(this)->find(price);
+        }
+
+        // The returned reference is valid until the next insert or erase.
+        Level& get_or_insert(Price price) {
+            auto it = lower(price);
+            if (it == v_.end() || it->price != price) it = v_.insert(it, Entry{price, Level{}});
+            return it->level;
+        }
+
+        void erase(Price price) { v_.erase(lower(price)); }
+
+    private:
+        // First entry whose price is not worse than `price`.
+        typename std::vector<Entry>::iterator lower(Price price) {
+            return std::lower_bound(v_.begin(), v_.end(), price,
+                                    [](const Entry& e, Price p) { return better(p, e.price); });
+        }
+
+        std::vector<Entry> v_;
+    };
+
+    Levels<std::greater<Price>> bids_;
+    Levels<std::less<Price>> asks_;
 
     // Node storage plus a free list of recycled slots: after warm-up, adding an
     // order reuses a slot instead of calling the allocator.
@@ -101,20 +147,20 @@ private:
     void free_node(NodeId n);
 
     // Appends an order to the back of its price level and indexes it.
-    template <class Levels>
-    void rest(Levels& levels, OrderId id, Side side, Price price, Quantity qty);
+    template <class SideLevels>
+    void rest(SideLevels& levels, OrderId id, Side side, Price price, Quantity qty);
 
     // The one matching loop shared by limit and market orders. Trades the
     // incoming order against `opposite` (best level first, FIFO within a level)
     // while its price is acceptable; no limit means a market order.
     // Returns the quantity left unfilled.
-    template <class Levels>
-    Quantity match(Levels& opposite, OrderId id, Side side, std::optional<Price> limit,
+    template <class SideLevels>
+    Quantity match(SideLevels& opposite, OrderId id, Side side, std::optional<Price> limit,
                    Quantity qty, std::vector<Trade>& trades);
 
     // Unlinks a resting order from its level, dropping the level if it empties.
-    template <class Levels>
-    void erase_resting(Levels& levels, NodeId n);
+    template <class SideLevels>
+    void erase_resting(SideLevels& levels, NodeId n);
 };
 
 }  // namespace ob

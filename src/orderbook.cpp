@@ -24,9 +24,9 @@ void OrderBook::free_node(NodeId n) {
     free_head_ = n;
 }
 
-template <class Levels>
-void OrderBook::rest(Levels& levels, OrderId id, Side side, Price price, Quantity qty) {
-    Level& level = levels[price];  // creates the level if it doesn't exist yet
+template <class SideLevels>
+void OrderBook::rest(SideLevels& levels, OrderId id, Side side, Price price, Quantity qty) {
+    Level& level = levels.get_or_insert(price);
     const NodeId n = alloc_node();
     pool_[n] = Node{id, price, qty, side, level.tail, kNone};
     if (level.tail != kNone) {
@@ -39,22 +39,18 @@ void OrderBook::rest(Levels& levels, OrderId id, Side side, Price price, Quantit
     index_.emplace(id, n);
 }
 
-template <class Levels>
-Quantity OrderBook::match(Levels& opposite, OrderId id, Side side, std::optional<Price> limit,
+template <class SideLevels>
+Quantity OrderBook::match(SideLevels& opposite, OrderId id, Side side, std::optional<Price> limit,
                           Quantity qty, std::vector<Trade>& trades) {
-    // The opposite map is sorted best-first, so its comparator answers "is a
-    // better than b". The level at price P is unacceptable exactly when the
-    // limit is strictly better than P from the resting side's view:
+    // The level at price P is unacceptable exactly when the limit is strictly
+    // better than P from the resting side's point of view:
     //   asks (less):    stop if limit < P   (buyer won't pay more than limit)
     //   bids (greater): stop if limit > P   (seller won't take less than limit)
-    const auto better = opposite.key_comp();
-
     while (qty > 0 && !opposite.empty()) {
-        auto level_it = opposite.begin();
-        const Price price = level_it->first;
-        if (limit && better(*limit, price)) break;
+        const Price price = opposite.best().price;
+        if (limit && SideLevels::better(*limit, price)) break;
 
-        Level& level = level_it->second;
+        Level& level = opposite.best().level;  // no inserts below, so this stays valid
         while (qty > 0 && level.head != kNone) {
             const NodeId n = level.head;
             Node& resting = pool_[n];
@@ -80,17 +76,16 @@ Quantity OrderBook::match(Levels& opposite, OrderId id, Side side, std::optional
 
         if (level.head == kNone) {
             level.tail = kNone;
-            opposite.erase(level_it);  // level_it is now invalid; loop re-reads begin()
+            opposite.pop_best();  // `level` now dangles; the loop re-reads best()
         }
     }
     return qty;
 }
 
-template <class Levels>
-void OrderBook::erase_resting(Levels& levels, NodeId n) {
+template <class SideLevels>
+void OrderBook::erase_resting(SideLevels& levels, NodeId n) {
     const Node& node = pool_[n];
-    auto level_it = levels.find(node.price);
-    Level& level = level_it->second;
+    Level& level = *levels.find(node.price);  // a resting order's level always exists
     level.total -= node.qty;
 
     if (node.prev != kNone) {
@@ -105,7 +100,7 @@ void OrderBook::erase_resting(Levels& levels, NodeId n) {
     }
 
     if (level.head == kNone) {
-        levels.erase(level_it);
+        levels.erase(node.price);
     }
     free_node(n);
 }
@@ -159,21 +154,17 @@ bool OrderBook::cancel(OrderId id) {
 
 std::optional<Price> OrderBook::best_bid() const {
     if (bids_.empty()) return std::nullopt;
-    return bids_.begin()->first;
+    return bids_.best().price;
 }
 
 std::optional<Price> OrderBook::best_ask() const {
     if (asks_.empty()) return std::nullopt;
-    return asks_.begin()->first;
+    return asks_.best().price;
 }
 
 Quantity OrderBook::volume_at(Side side, Price price) const {
-    if (side == Side::Buy) {
-        auto it = bids_.find(price);
-        return it == bids_.end() ? 0 : it->second.total;
-    }
-    auto it = asks_.find(price);
-    return it == asks_.end() ? 0 : it->second.total;
+    const Level* level = side == Side::Buy ? bids_.find(price) : asks_.find(price);
+    return level ? level->total : 0;
 }
 
 std::size_t OrderBook::order_count() const {
