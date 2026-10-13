@@ -1,43 +1,10 @@
-// Behaviour tests for the order book. They define what "done" means:
-// make test should print every test as PASS.
+// Behaviour tests for the core matching rules (price-time priority, market
+// orders, cancel), using the simple convenience API.
 
-#include "orderbook.hpp"
-
-#include <cstdio>
-#include <functional>
-#include <string>
-#include <vector>
+#include "ob/order_book.hpp"
+#include "test.hpp"
 
 using namespace ob;
-
-static int failures = 0;
-
-#define CHECK(cond)                                                        \
-    do {                                                                   \
-        if (!(cond)) {                                                     \
-            std::printf("    line %d: CHECK(%s) failed\n", __LINE__, #cond); \
-            ok = false;                                                    \
-        }                                                                  \
-    } while (0)
-
-struct Test {
-    std::string name;
-    std::function<bool()> fn;
-};
-
-static std::vector<Test>& registry() {
-    static std::vector<Test> tests;
-    return tests;
-}
-
-struct Register {
-    Register(const char* name, std::function<bool()> fn) { registry().push_back({name, std::move(fn)}); }
-};
-
-#define TEST(name)                                  \
-    static bool name();                             \
-    static Register reg_##name(#name, name);        \
-    static bool name()
 
 // ---------------------------------------------------------------- resting
 
@@ -285,32 +252,4 @@ TEST(many_orders_stay_consistent) {
     CHECK(book.volume_at(Side::Buy, 1049) == 500);
     CHECK(book.order_count() == 501);
     return ok;
-}
-
-// ---------------------------------------------------------------- buffer API
-
-TEST(reusable_trade_buffer_is_cleared_each_call) {
-    bool ok = true;
-    OrderBook book;
-    std::vector<Trade> trades;
-    book.add_limit(1, Side::Sell, 100, 5, trades);
-    CHECK(trades.empty());
-    book.add_limit(2, Side::Buy, 100, 3, trades);
-    CHECK(trades.size() == 1 && trades[0].sell_id == 1 && trades[0].quantity == 3);
-    book.add_market(3, Side::Buy, 10, trades);  // previous trade must not linger
-    CHECK(trades.size() == 1 && trades[0].buy_id == 3 && trades[0].quantity == 2);
-    book.add_limit(4, Side::Buy, 99, 1, trades);
-    CHECK(trades.empty());
-    CHECK(book.order_count() == 1);
-    return ok;
-}
-
-int main() {
-    for (auto& t : registry()) {
-        bool passed = t.fn();
-        std::printf("%s  %s\n", passed ? "PASS" : "FAIL", t.name.c_str());
-        if (!passed) ++failures;
-    }
-    std::printf("\n%zu tests, %d failed\n", registry().size(), failures);
-    return failures == 0 ? 0 : 1;
 }

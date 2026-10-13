@@ -1,7 +1,7 @@
 // Benchmark: replays a pre-generated, repeatable order stream through the book
 // and reports throughput plus per-operation latency percentiles.
 
-#include "orderbook.hpp"
+#include "ob/order_book.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -76,23 +76,26 @@ std::vector<Op> generate() {
     return ops;
 }
 
-// One trade buffer reused for every call, so the hot loop never allocates it.
-std::vector<Trade> trades;
+// One event buffer reused for every call, so the hot loop never allocates it.
+std::vector<Event> events;
 
 inline std::uint64_t apply(OrderBook& book, const Op& op) {
-    std::uint64_t traded = 0;
+    events.clear();
     switch (op.kind) {
         case Kind::Limit:
-            book.add_limit(op.id, op.side, op.price, op.qty, trades);
-            for (const Trade& t : trades) traded += t.quantity;
+            book.submit({op.id, 0, op.side, OrderType::Limit, TimeInForce::GTC, op.price, op.qty, false}, events);
             break;
         case Kind::Market:
-            book.add_market(op.id, op.side, op.qty, trades);
-            for (const Trade& t : trades) traded += t.quantity;
+            book.submit({op.id, 0, op.side, OrderType::Market, TimeInForce::IOC, 0, op.qty, false}, events);
             break;
         case Kind::Cancel:
-            traded += book.cancel(op.id);
+            book.cancel(op.id, events);
             break;
+    }
+    std::uint64_t traded = 0;
+    for (const Event& e : events) {
+        if (e.type == EventType::Trade) traded += e.qty;
+        if (e.type == EventType::Cancelled && e.cancel == CancelReason::Requested) traded += 1;
     }
     return traded;
 }
@@ -107,7 +110,9 @@ double percentile_ns(const std::vector<std::int64_t>& sorted, double p) {
 
 int main() {
     const std::vector<Op> ops = generate();
-    trades.reserve(1024);
+    BookConfig config;
+    config.expected_orders = kExpectedOrders;
+    events.reserve(1024);
     std::size_t counts[3] = {};
     for (const Op& op : ops) ++counts[static_cast<int>(op.kind)];
     std::printf("ops: %zu  (limit %zu, cancel %zu, market %zu), seed %llu\n\n", ops.size(),
@@ -118,7 +123,7 @@ int main() {
     std::uint64_t checksum = 0;
     std::vector<double> rates;
     for (int run = 0; run < kRuns; ++run) {
-        OrderBook book(kExpectedOrders);
+        OrderBook book(config);
         std::uint64_t sink = 0;
         const auto start = Clock::now();
         for (const Op& op : ops) sink += apply(book, op);
@@ -137,7 +142,7 @@ int main() {
     std::vector<std::int64_t> by_kind[3];
     for (int k = 0; k < 3; ++k) by_kind[k].reserve(counts[k]);
     {
-        OrderBook book(kExpectedOrders);
+        OrderBook book(config);
         std::uint64_t sink = 0;
         for (std::size_t i = 0; i < ops.size(); ++i) {
             const auto start = Clock::now();
