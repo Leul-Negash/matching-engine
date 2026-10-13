@@ -76,6 +76,10 @@ private:
     // Hash index id -> location: O(1) average lookup for cancel. Holds exactly
     // one entry per resting order, so its size() is order_count().
     std::unordered_map<OrderId, Locator> index_;
+
+    // Appends an order to the back of its price level and indexes it.
+    template <class Levels>
+    void rest(Levels& levels, OrderId id, Side side, Price price, Quantity qty);
 };
 
 }  // namespace ob
