@@ -38,7 +38,7 @@ APP_BIN  := $(APP_SRC:apps/%.cpp=$(OUT)/%)
 BENCH_BIN := $(BENCH_SRC:bench/%.cpp=$(OUT)/%)
 LIB      := $(OUT)/libob.a
 
-.PHONY: all test test-asan test-tsan bench smoke check clean
+.PHONY: all test test-asan test-tsan bench bench-e2e smoke check clean
 
 all: $(OUT)/ob_tests $(APP_BIN) $(BENCH_BIN)
 
@@ -71,6 +71,11 @@ test-tsan:
 bench:
 	$(MAKE) BUILD=release all
 	./build/release/bench_book
+
+# Server + load generator over loopback TCP, with and without the journal.
+bench-e2e:
+	$(MAKE) BUILD=release all
+	./scripts/bench_e2e.sh build/release
 
 # End-to-end: start the server, drive it over TCP, check replies and recovery.
 smoke:

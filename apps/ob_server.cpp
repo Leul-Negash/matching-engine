@@ -36,6 +36,7 @@ void usage() {
                  "  --journal PATH              write-ahead journal; replayed on startup\n"
                  "  --fsync                     fsync the journal before acknowledging (survives power loss)\n"
                  "  --no-cancel-on-disconnect   leave a session's orders resting when it drops\n"
+                 "  --busy-poll                 spin instead of sleeping when idle (lowest latency, 2 cores at 100%%)\n"
                  "  --max-sessions N            default 1000\n"
                  "  --max-rate N                messages per second per session, 0 = unlimited (default 100000)\n"
                  "  --log-level LEVEL           debug, info, warn or error (default info)\n");
@@ -108,6 +109,8 @@ int main(int argc, char** argv) {
             journal_path = std::string(value());
         } else if (arg == "--fsync") {
             fsync = true;
+        } else if (arg == "--busy-poll") {
+            server_cfg.busy_poll = true;
         } else if (arg == "--no-cancel-on-disconnect") {
             server_cfg.cancel_on_disconnect = false;
         } else if (arg == "--max-sessions") {

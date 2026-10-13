@@ -9,6 +9,7 @@ usage: smoke_test.py <build-dir>
 """
 
 import os
+import shutil
 import signal
 import socket
 import subprocess
@@ -82,6 +83,7 @@ class Client:
 
 
 servers = []  # every process started; killed on exit whatever happens
+tmp_dirs = []
 
 
 def start(port, journal, *extra):
@@ -99,6 +101,7 @@ def start(port, journal, *extra):
 
 def main():
     tmp = tempfile.mkdtemp(prefix="ob_smoke_")
+    tmp_dirs.append(tmp)
     journal = os.path.join(tmp, "ob.journal")
     port = free_port()
     proc = start(port, journal)
@@ -184,4 +187,6 @@ if __name__ == "__main__":
             if p.poll() is None:
                 p.kill()
                 p.wait()
+        for d in tmp_dirs:
+            shutil.rmtree(d, ignore_errors=True)
     sys.exit(code)

@@ -177,6 +177,10 @@ struct Server::Impl {
                         if (in_q.empty()) break;
                         continue;
                     }
+                    if (cfg.busy_poll) {
+                        cpu_relax();
+                        continue;
+                    }
                     // Spin briefly (cheap wake-up under load), then sleep until
                     // the gateway bumps in_signal.
                     for (int i = 0; i < kIdleSpins && in_q.empty(); ++i) cpu_relax();
@@ -196,12 +200,12 @@ struct Server::Impl {
 
                 for (const Output& o : outs) {
                     while (!out_q.try_push(o)) {  // backpressure: wait for the gateway
-                        signal_fd(wake_fd);
+                        if (!cfg.busy_poll) signal_fd(wake_fd);
                         std::this_thread::yield();
                     }
                 }
                 outs.clear();
-                signal_fd(wake_fd);
+                if (!cfg.busy_poll) signal_fd(wake_fd);  // a busy-polling gateway checks the queue anyway
             }
         } catch (const std::exception& e) {
             OB_LOG(Error, "matching thread stopped: %s", e.what());
@@ -212,9 +216,10 @@ struct Server::Impl {
     }
 
     void notify_matching() {
+        notify_pending = false;
+        if (cfg.busy_poll && !matching_stop.load(std::memory_order_relaxed)) return;  // it never sleeps
         in_signal.fetch_add(1, std::memory_order_release);
         in_signal.notify_one();
-        notify_pending = false;
     }
 
     void submit(const Command& c) {
@@ -609,7 +614,7 @@ struct Server::Impl {
         epoll_event events[64];
         bool stopping = false;
         while (!stopping) {
-            const int n = ::epoll_wait(epoll_fd, events, 64, -1);
+            const int n = ::epoll_wait(epoll_fd, events, 64, cfg.busy_poll ? 0 : -1);
             if (n < 0) {
                 if (errno == EINTR) continue;
                 OB_LOG(Error, "epoll_wait: %s", std::strerror(errno));

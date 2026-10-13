@@ -17,6 +17,9 @@ struct ServerConfig {
     std::size_t max_output_buffer = 8u << 20;  // bytes queued for one client before it is dropped
     std::uint32_t max_msgs_per_sec = 100'000;  // per session; 0 = unlimited
     std::size_t queue_capacity = 1u << 16;     // entries in each inter-thread queue
+    // Both threads spin instead of sleeping when idle: lowest latency (no
+    // wake-ups), but each keeps a CPU core at 100%. For dedicated machines.
+    bool busy_poll = false;
 };
 
 struct ServerStats {
