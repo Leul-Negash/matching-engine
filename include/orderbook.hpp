@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <functional>
-#include <list>
 #include <map>
 #include <optional>
 #include <unordered_map>
@@ -57,17 +56,30 @@ public:
     std::size_t order_count() const;
 
 private:
-    struct Order {
+    // Index of an order node in pool_. Indices, unlike pointers or iterators,
+    // stay valid when the pool's vector grows and reallocates.
+    using NodeId = std::uint32_t;
+    static constexpr NodeId kNone = ~NodeId{0};
+
+    // A resting order, linked into its level's FIFO queue by index. The pool is
+    // one contiguous vector, so orders are not individually heap-allocated and
+    // a level's queue is walked through nearby memory.
+    struct Node {
         OrderId id;
+        Price price;
         Quantity qty;  // remaining (unfilled) quantity
+        Side side;
+        NodeId prev;
+        NodeId next;   // also chains free nodes when the node is unused
     };
 
-    // One price level: FIFO queue of resting orders at a single price.
-    // std::list gives O(1) push_back, pop_front and erase-by-iterator, and
-    // erasing one node never invalidates iterators to the others (O(1) cancel).
+    // One price level: intrusive doubly linked FIFO queue of resting orders.
+    // O(1) push to the back, pop from the front, and unlink from the middle
+    // (cancel), without allocating.
     struct Level {
-        std::list<Order> orders;
-        Quantity total = 0;  // cached sum of orders[i].qty, so volume_at is O(1)
+        NodeId head = kNone;
+        NodeId tail = kNone;
+        Quantity total = 0;  // cached sum of the queue's qty, so volume_at is O(1)
     };
 
     // Sorted price levels per side; begin() is always the best price.
@@ -75,16 +87,18 @@ private:
     std::map<Price, Level, std::greater<Price>> bids_;
     std::map<Price, Level, std::less<Price>> asks_;
 
-    // Where a resting order lives, so cancel(id) needs no search.
-    struct Locator {
-        Side side;
-        Price price;
-        std::list<Order>::iterator it;
-    };
+    // Node storage plus a free list of recycled slots: after warm-up, adding an
+    // order reuses a slot instead of calling the allocator.
+    std::vector<Node> pool_;
+    NodeId free_head_ = kNone;
 
-    // Hash index id -> location: O(1) average lookup for cancel. Holds exactly
-    // one entry per resting order, so its size() is order_count().
-    std::unordered_map<OrderId, Locator> index_;
+    // Hash index id -> node (which records side and price), so cancel(id)
+    // needs no search. Holds exactly one entry per resting order, so its
+    // size() is order_count().
+    std::unordered_map<OrderId, NodeId> index_;
+
+    NodeId alloc_node();
+    void free_node(NodeId n);
 
     // Appends an order to the back of its price level and indexes it.
     template <class Levels>
@@ -98,9 +112,9 @@ private:
     Quantity match(Levels& opposite, OrderId id, Side side, std::optional<Price> limit,
                    Quantity qty, std::vector<Trade>& trades);
 
-    // Removes one resting order (located via the index) from its level.
+    // Unlinks a resting order from its level, dropping the level if it empties.
     template <class Levels>
-    void erase_resting(Levels& levels, const Locator& loc);
+    void erase_resting(Levels& levels, NodeId n);
 };
 
 }  // namespace ob

@@ -249,6 +249,25 @@ TEST(cancelled_order_is_skipped_by_matching) {
     return ok;
 }
 
+TEST(cancel_from_middle_and_back_keeps_fifo_order) {
+    bool ok = true;
+    OrderBook book;
+    for (OrderId id = 1; id <= 5; ++id) book.add_limit(id, Side::Sell, 100, 1);
+    CHECK(book.cancel(3));  // middle
+    CHECK(book.cancel(5));  // back
+    book.add_limit(6, Side::Sell, 100, 1);  // must queue behind 4, not in 5's old slot
+    CHECK(book.volume_at(Side::Sell, 100) == 4);
+    auto trades = book.add_limit(7, Side::Buy, 100, 10);
+    CHECK(trades.size() == 4);
+    if (trades.size() == 4) {
+        CHECK(trades[0].sell_id == 1 && trades[1].sell_id == 2);
+        CHECK(trades[2].sell_id == 4 && trades[3].sell_id == 6);
+    }
+    CHECK(book.volume_at(Side::Buy, 100) == 6);
+    CHECK(book.order_count() == 1);
+    return ok;
+}
+
 // ---------------------------------------------------------------- stress
 
 TEST(many_orders_stay_consistent) {

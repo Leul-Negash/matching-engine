@@ -6,14 +6,37 @@ namespace ob {
 
 OrderBook::OrderBook(std::size_t expected_orders) {
     index_.reserve(expected_orders);
+    pool_.reserve(expected_orders);
+}
+
+OrderBook::NodeId OrderBook::alloc_node() {
+    if (free_head_ != kNone) {
+        const NodeId n = free_head_;
+        free_head_ = pool_[n].next;
+        return n;
+    }
+    pool_.emplace_back();
+    return static_cast<NodeId>(pool_.size() - 1);
+}
+
+void OrderBook::free_node(NodeId n) {
+    pool_[n].next = free_head_;
+    free_head_ = n;
 }
 
 template <class Levels>
 void OrderBook::rest(Levels& levels, OrderId id, Side side, Price price, Quantity qty) {
     Level& level = levels[price];  // creates the level if it doesn't exist yet
-    level.orders.push_back({id, qty});
+    const NodeId n = alloc_node();
+    pool_[n] = Node{id, price, qty, side, level.tail, kNone};
+    if (level.tail != kNone) {
+        pool_[level.tail].next = n;
+    } else {
+        level.head = n;
+    }
+    level.tail = n;
     level.total += qty;
-    index_.emplace(id, Locator{side, price, std::prev(level.orders.end())});
+    index_.emplace(id, n);
 }
 
 template <class Levels>
@@ -32,8 +55,9 @@ Quantity OrderBook::match(Levels& opposite, OrderId id, Side side, std::optional
         if (limit && better(*limit, price)) break;
 
         Level& level = level_it->second;
-        while (qty > 0 && !level.orders.empty()) {
-            Order& resting = level.orders.front();
+        while (qty > 0 && level.head != kNone) {
+            const NodeId n = level.head;
+            Node& resting = pool_[n];
             const Quantity traded = std::min(qty, resting.qty);
 
             if (side == Side::Buy) {
@@ -47,12 +71,15 @@ Quantity OrderBook::match(Levels& opposite, OrderId id, Side side, std::optional
             level.total -= traded;
 
             if (resting.qty == 0) {
-                index_.erase(resting.id);  // erase from the index before the node dies
-                level.orders.pop_front();
+                index_.erase(resting.id);
+                level.head = resting.next;
+                if (level.head != kNone) pool_[level.head].prev = kNone;
+                free_node(n);  // last: reuses resting.next, so read it first
             }
         }
 
-        if (level.orders.empty()) {
+        if (level.head == kNone) {
+            level.tail = kNone;
             opposite.erase(level_it);  // level_it is now invalid; loop re-reads begin()
         }
     }
@@ -60,14 +87,27 @@ Quantity OrderBook::match(Levels& opposite, OrderId id, Side side, std::optional
 }
 
 template <class Levels>
-void OrderBook::erase_resting(Levels& levels, const Locator& loc) {
-    auto level_it = levels.find(loc.price);
+void OrderBook::erase_resting(Levels& levels, NodeId n) {
+    const Node& node = pool_[n];
+    auto level_it = levels.find(node.price);
     Level& level = level_it->second;
-    level.total -= loc.it->qty;
-    level.orders.erase(loc.it);
-    if (level.orders.empty()) {
+    level.total -= node.qty;
+
+    if (node.prev != kNone) {
+        pool_[node.prev].next = node.next;
+    } else {
+        level.head = node.next;
+    }
+    if (node.next != kNone) {
+        pool_[node.next].prev = node.prev;
+    } else {
+        level.tail = node.prev;
+    }
+
+    if (level.head == kNone) {
         levels.erase(level_it);
     }
+    free_node(n);
 }
 
 std::vector<Trade> OrderBook::add_limit(OrderId id, Side side, Price price, Quantity qty) {
@@ -107,13 +147,13 @@ void OrderBook::add_market(OrderId id, Side side, Quantity qty, std::vector<Trad
 bool OrderBook::cancel(OrderId id) {
     auto it = index_.find(id);
     if (it == index_.end()) return false;
-    const Locator& loc = it->second;
-    if (loc.side == Side::Buy) {
-        erase_resting(bids_, loc);
+    const NodeId n = it->second;
+    index_.erase(it);
+    if (pool_[n].side == Side::Buy) {
+        erase_resting(bids_, n);
     } else {
-        erase_resting(asks_, loc);
+        erase_resting(asks_, n);
     }
-    index_.erase(it);  // last: loc refers into this entry
     return true;
 }
 
