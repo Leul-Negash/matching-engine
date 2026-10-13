@@ -1,7 +1,11 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
+#include <list>
+#include <map>
 #include <optional>
+#include <unordered_map>
 #include <vector>
 
 namespace ob {
@@ -44,7 +48,34 @@ public:
     std::size_t order_count() const;
 
 private:
-    // TODO: your data structures go here. See GUIDE.md, milestone 1.
+    struct Order {
+        OrderId id;
+        Quantity qty;  // remaining (unfilled) quantity
+    };
+
+    // One price level: FIFO queue of resting orders at a single price.
+    // std::list gives O(1) push_back, pop_front and erase-by-iterator, and
+    // erasing one node never invalidates iterators to the others (O(1) cancel).
+    struct Level {
+        std::list<Order> orders;
+        Quantity total = 0;  // cached sum of orders[i].qty, so volume_at is O(1)
+    };
+
+    // Sorted price levels per side; begin() is always the best price.
+    // Bids sort descending (std::greater), asks ascending (std::less).
+    std::map<Price, Level, std::greater<Price>> bids_;
+    std::map<Price, Level, std::less<Price>> asks_;
+
+    // Where a resting order lives, so cancel(id) needs no search.
+    struct Locator {
+        Side side;
+        Price price;
+        std::list<Order>::iterator it;
+    };
+
+    // Hash index id -> location: O(1) average lookup for cancel. Holds exactly
+    // one entry per resting order, so its size() is order_count().
+    std::unordered_map<OrderId, Locator> index_;
 };
 
 }  // namespace ob
