@@ -14,7 +14,7 @@ NEW o1 AAPL BUY 100 15000
 ACK o1 1
 ```
 
-## Client → server
+## Client -> server
 
 | Message | Meaning |
 |---|---|
@@ -25,11 +25,11 @@ ACK o1 1
 | `SUB <symbol>` / `UNSUB <symbol>` | Start or stop the public `TRADE` and `BBO` feed for a symbol. |
 | `PING` | Liveness check. |
 
-`clordid` is the client's own id for the order: 1–32 characters from
+`clordid` is the client's own id for the order: 1-32 characters from
 `[A-Za-z0-9_.-]`. It must be unique among the session's live orders, and it can
 be reused once the order is finished.
 
-## Server → client
+## Server -> client
 
 | Message | Meaning |
 |---|---|
@@ -91,7 +91,7 @@ messages. Match replies to requests by `clordid`, not by position.
   the same connection never trade with each other. The incoming order's
   remainder is cancelled with `SELF_TRADE`.
 - **Rate limit.** By default each session may send 100,000 messages per second
-  (`--max-rate`). Messages over the limit get `REJECT … THROTTLED` or
+  (`--max-rate`). Messages over the limit get `REJECT ... THROTTLED` or
   `ERROR throttled`.
 - **Slow consumers.** If more than 8 MiB of replies are queued for a client that
   isn't reading, the connection is closed. This stops one slow reader from

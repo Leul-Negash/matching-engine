@@ -16,17 +16,16 @@ and is tested on its own.
 ## Threads and data flow
 
 ```
-                 gateway thread                                matching thread
-            ┌──────────────────────────┐                  ┌──────────────────────────┐
- clients ──►│ epoll: accept/read/write │   Command (40 B)  │ pop batch (≤256)         │
-  (TCP)     │ parse line → Command     │ ───────────────►  │ journal.append × n       │
-            │ clordid → order id       │   SPSC queue in   │ journal.commit()  ◄── one write (+fsync)
-            │                          │                   │ engine.process × n       │
-            │ Output → ACK/FILL/...    │ ◄───────────────  │ push outputs             │
- clients ◄──│ route to owning sessions │   SPSC queue out  │ eventfd → wake gateway   │
-            └──────────────────────────┘                  └──────────────────────────┘
-                      ▲      │ in_signal.notify (atomic wait/futex)  ▲
-                      └──────┴───────────────────────────────────────┘
+                 gateway thread                              matching thread
+            +--------------------------+                +--------------------------+
+ clients -->| epoll: accept/read/write |  Command (40 B) | pop batch (<= 256)       |
+  (TCP)     | parse line -> Command    | -------------> | journal.append x n       |
+            | clordid -> order id      |  SPSC queue in | journal.commit()         |  <- one write (+fsync)
+            |                          |                | engine.process x n       |
+            | Output -> ACK/FILL/...   | <------------- | push outputs             |
+ clients <--| route to owning sessions | SPSC queue out | eventfd -> wake gateway  |
+            +--------------------------+                +--------------------------+
+                   in_signal.notify (atomic wait / futex) wakes the matching thread
 ```
 
 Only the matching thread touches the engine and the books, so matching needs
@@ -40,8 +39,8 @@ signals.
 2. `proto::parse` validates the syntax. The gateway then checks that the
    symbol exists and that the clordid isn't live for this session.
 3. The gateway assigns the next engine order id and records two mappings:
-   `clordid → (order id, instrument)` in the session, and
-   `order id → (session, clordid)` in `owners`. It pushes a `Command` to the
+   `clordid -> (order id, instrument)` in the session, and
+   `order id -> (session, clordid)` in `owners`. It pushes a `Command` to the
    inbound queue.
 4. The matching thread pops a batch, appends every state-changing command to
    the journal and **commits once for the whole batch** (group commit). Only
@@ -62,7 +61,7 @@ price is, who is first in line at it, and where an order is given its id.
 
 | Structure | Choice | Why |
 |---|---|---|
-| Price levels per side | `std::vector<{price, Level}>` sorted worst → best | The best level is `back()`, so reading it or removing it after a sweep is O(1). New levels mostly appear near the top, i.e. near the end of the vector, so inserts shift few elements. Lookup is a binary search over contiguous memory. Bids and asks share code through a `Better` comparator. |
+| Price levels per side | `std::vector<{price, Level}>` sorted worst -> best | The best level is `back()`, so reading it or removing it after a sweep is O(1). New levels mostly appear near the top, i.e. near the end of the vector, so inserts shift few elements. Lookup is a binary search over contiguous memory. Bids and asks share code through a `Better` comparator. |
 | Queue at a level | Intrusive doubly linked list | Push to the back, pop from the front and unlink from the middle (cancel) are all O(1) with no allocation. |
 | Order storage | `std::vector<Node>` pool plus a free list | No per-order heap allocation. Links are 32-bit indices, which stay valid when the vector grows. |
 | Order lookup | `std::unordered_map<OrderId, NodeId>` | O(1) cancel and modify. It is reserved up front, because a rehash of a large table stalls for milliseconds. |
@@ -122,7 +121,7 @@ record   u32 CRC-32(command bytes) | Command (40 bytes)
 - **Write-ahead, group commit.** The matching thread appends a whole batch and
   then makes one `write()`, plus one `fdatasync()` with `--fsync`, before
   processing the batch. Under load one sync covers hundreds of commands; in
-  the benchmark this gave 63× the throughput of syncing every request.
+  the benchmark this gave 63x the throughput of syncing every request.
 - **Durability modes.**
   - Without `--fsync`, a committed command has been handed to the kernel. It
     survives a crash of the process but not of the machine.

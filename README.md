@@ -155,8 +155,8 @@ On an Intel i5-8365U laptop (details and method in
 |---|---|
 | Order book, 1M mixed operations | 3.8M ops/s; p50 222 ns, p99 1.1 µs |
 | End to end over TCP, unloaded, busy-poll | p50 39 µs, p99 66 µs round trip |
-| End to end, 4 clients × 32 in flight | 285k req/s with the journal, 385k with busy-poll |
-| End to end with fsync per batch | 28k req/s; group commit gives 63× the throughput of one request at a time |
+| End to end, 4 clients x 32 in flight | 285k req/s with the journal, 385k with busy-poll |
+| End to end with fsync per batch | 28k req/s; group commit gives 63x the throughput of one request at a time |
 
 ## Design
 

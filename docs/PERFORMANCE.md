@@ -3,7 +3,7 @@
 Machine: Intel Core i5-8365U (4 cores / 8 threads, 1.6 GHz base, 4.1 GHz
 turbo, 6 MiB L3), NVMe SSD, Ubuntu 26.04, Linux 7.0, GCC 15.2, `-O2`.
 
-It's a laptop: turbo and thermal throttling move results by ±15% between runs.
+It's a laptop: turbo and thermal throttling move results by +/-15% between runs.
 The book benchmarks below were run pinned to one core (`taskset -c 3`). Where
 two versions are compared, they were run alternately, and the tables show
 medians.
@@ -53,7 +53,7 @@ vary from run to run.
 What each step taught:
 
 - **Rehashing was the biggest tail problem.** Without `reserve`, one insert
-  rehashed about 200k entries and took 21 ms, a 300× worse maximum, yet it
+  rehashed about 200k entries and took 21 ms, a 300x worse maximum, yet it
   barely moved the average. This is why trading systems watch p99 and p99.9
   rather than the mean: the rare stall lands during bursts, exactly when
   latency matters most.
@@ -109,7 +109,7 @@ flight at about 290k req/s is about 440 µs of waiting.
 
 - **Group commit.** With fsync, each sync takes about 2 ms on this SSD. One
   request at a time therefore manages 445 req/s, but under load one sync
-  covers a whole batch and throughput reaches 28k req/s, 63× more. This is why
+  covers a whole batch and throughput reaches 28k req/s, 63x more. This is why
   the journal commits per batch rather than per command.
 - **tmpfs makes fsync free.** The first fsync benchmark wrote to `/tmp`, which
   is RAM-backed `tmpfs` here, and fsync appeared to cost nothing. The
