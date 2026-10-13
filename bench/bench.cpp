@@ -132,7 +132,7 @@ int main() {
                 rates[kRuns / 2] / 1e6, kRuns, rates.front() / 1e6, rates.back() / 1e6);
 
     // 2) Latency: time each operation individually on another fresh book.
-    //    Includes ~20 ns of clock-read overhead per sample.
+    //    Includes ~35 ns of clock-read overhead per sample on the test machine.
     std::vector<std::int64_t> all(ops.size());
     std::vector<std::int64_t> by_kind[3];
     for (int k = 0; k < 3; ++k) by_kind[k].reserve(counts[k]);
